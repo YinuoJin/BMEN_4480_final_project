@@ -58,7 +58,7 @@ marker_genes[1:ncol(marker_genes)]
 
 ### Load count matrix (filtered, log-normal transformed and batch-corrected)
 ```{r}
-counts <- read.csv(paste0(data_path, "batchnorm_counts.csv"), row.names = "Cell_ID", header = 1)
+counts <- read.csv(paste0(data_path, "preprocessed_counts.csv"), row.names = "Cell_ID", header = 1)
 ```
 
 ```{r}
@@ -83,14 +83,6 @@ counts_s <- AddMetaData(
 require(gridExtra)
 suppressMessages(library(hash))
 source("rl_utils.R")
-```
-
-```{r}
-title <- "Macrophage2"
-```
-
-```{r}
-
 ```
 
 ### Wrapper functions
@@ -167,18 +159,10 @@ saveNicheNetPlots <- function(fig_list, sender, receiver, fig_path = "/plots/") 
 
 
 ### Visualize NicheNet RL interction results for tumor & macrophage pair
-```{r}
-#' Wrapper function to run a single NicheNet analysis (Sender cluster -> Receiver cluster)
-#' @param counts_s Gene by Cell count matrix in Seurat object
-#' @param sender Name for sender cluster
-#' @param receiver Name for receiver cluster
-#' @param prior_models NicheNet prior networks
-#' @return list of prediction raw results & plots
-```
 
 ```{r}
-tumor_clusters <- c("Transformed1", "Transformed2")
-macrophage_clusters <- c("Macrophage1", "Macrophage2")
+tumor_clusters <- c("Tumor")
+macrophage_clusters <- c("Macrophage.1", "Macrophage.2")
 
 pred_lr_network_list = list()
 
@@ -233,49 +217,34 @@ topPredRLscores <- function(pred_lr_network, n = 50) {
 ```
 
 
-### Transformed 1 --> Macrophage 1
+### Tumor --> Macrophage 1
 ```{r}
-topPredRLscores(pred_lr_network_list$Transformed1_Macrophage1)
+topPredRLscores(pred_lr_network_list$Tumor_Macrophage.1)
 ```
 
-### Macrophage 1 --> Transformed 1
+### Macrophage 1 --> Tumor
 ```{r}
-topPredRLscores(pred_lr_network_list$Macrophage1_Transformed1)
+topPredRLscores(pred_lr_network_list$Macrophage.1_Tumor)
 ```
 
-### Transformed 2 --> Macrophage 1
+### Tumor --> Macrophage 2
 ```{r}
-topPredRLscores(pred_lr_network_list$Transformed2_Macrophage1)
+topPredRLscores(pred_lr_network_list$Tumor_Macrophage.2)
 ```
 
-### Macrophage 1 --> Transformed 2
+### Macrophage 2 --> Tumor
 ```{r}
-topPredRLscores(pred_lr_network_list$Macrophage2_Transformed1)
+topPredRLscores(pred_lr_network_list$Macrophage.2_Tumor)
 ```
 
-### Transformed 1 --> Macrophage 2
-```{r}
-topPredRLscores(pred_lr_network_list$Transformed1_Macrophage2)
-```
-
-### Macrophage 2 --> Transformed 1
-```{r}
-topPredRLscores(pred_lr_network_list$Macrophage2_Transformed1)
-```
-
-### Transformed 2 --> Macrophage 2
-```{r}
-topPredRLscores(pred_lr_network_list$Transformed2_Macrophage2)
-```
-
-### Macrophage 2 --> Transformed 2
-```{r}
-topPredRLscores(pred_lr_network_list$Macrophage2_Transformed2)
-```
 
 ### Save top 50 R-L pairs to csv
 ```{r}
-output_path <- "./top_rl_pairs/"
+output_path <- paste0(getwd(), "/top_rl_pairs/")
+if (!dir.exists(output_path)) {
+   dir.create(output_path)
+}
+
 for (tumor in tumor_clusters) {
   for (macrophage in macrophage_clusters) {
     keyword1 <- paste(tumor, macrophage, sep = "_")
