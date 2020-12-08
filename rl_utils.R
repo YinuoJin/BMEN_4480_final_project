@@ -27,7 +27,7 @@ suppressMessages(library(circlize))
 #'
 get_RL_pred <- function(count_matrix, geneset_oi, es=NULL, er=NULL, from_count=FALSE, N=NULL, cutoff=0.25, prior_models=NULL, name_l, name_r, fig_path){
 	
-	if (is.null(prior_models)) {
+	if (!is.null(prior_models)) {
 		lr_network <- prior_models$lr_network
 		weighted_networks <- prior_models$weighted_networks
 		ligand_target_matrix <- prior_models$ligand_target_matrix
@@ -40,9 +40,6 @@ get_RL_pred <- function(count_matrix, geneset_oi, es=NULL, er=NULL, from_count=F
 	
 	if (from_count){
 		#only keep genes that are found in the ligand_target_matrix
-		#background_expressed_genes = colnames(count_matrix) %>% .[. %in% rownames(ligand_target_matrix)]
-		#expressed_genes_sender = colnames(count_matrix) %>% .[. %in% colnames(ligand_target_matrix)]
-		#expressed_genes_receiver = colnames(count_matrix)
 		background_expressed_genes = rownames(count_matrix) %>% .[. %in% rownames(ligand_target_matrix)]
 		expressed_genes_sender = rownames(count_matrix) %>% .[. %in% colnames(ligand_target_matrix)]
 		expressed_genes_receiver = rownames(count_matrix)
@@ -149,9 +146,7 @@ get_RL_pred <- function(count_matrix, geneset_oi, es=NULL, er=NULL, from_count=F
 
 
 #' Utility function for NicheNet
-#' Visualize and save circos plots for predicted RL pairs of given two clusters
-#' TODO: extend the flexibility of this function: include N -> 1 / 1 -> N / N -> N visualizations as show in the vignettes here
-#'       https://github.com/saeyslab/nichenetr/blob/master/vignettes/circos.md   
+#' Visualize and save circos plots for predicted RL pairs of given two clustersaa
 #'
 #'
 visualize_RL_pred <- function(lr_network_top_df, 

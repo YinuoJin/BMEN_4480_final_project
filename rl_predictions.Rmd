@@ -1,5 +1,5 @@
 ---
-title: "NicheNet analysis for BMEN 4480 Final Project"
+title: "NicheNet analysis; BMEN 4480 Final Project"
 output: html_notebook
 ---
 
@@ -22,7 +22,7 @@ data_path <- "dataset/"
 ```
 
 # Load NicheNet prior models & matrices, Load dataset
-### Load Nichenet models
+### Load NicheNet models
 ```{r}
 lr_network <- readRDS(paste0(data_path, "lr_network.rds"))
 weighted_networks <- readRDS(paste0(data_path, "weighted_networks.rds"))
@@ -37,13 +37,23 @@ lr_network[1:5, 1:length(lr_network)]
 ligand_target_matrix[1:5, 1:5]
 ```
 
+
+```{r}
+weighted_networks$lr_sig
+```
+
+```{r}
+write.csv(weighted_networks$lr_sig, file = paste0(data_path, "lr_sig.csv"))
+```
+
+
 ```{r}
 prior_models <- list(lr_network=lr_network, weighted_networks=weighted_networks, ligand_target_matrix=ligand_target_matrix)
 ```
 
 
 
-### Load universal expressed genes and cluster-wise specific "marker genes" top DEGs
+### Load expressed genes and cluster-wise specific "marker genes" - top DEGs
 ```{r}
 expr_genes <- read.csv(paste0(data_path, "expressed_genes.csv"), header = 1)
 marker_genes <- read.csv("dataset/cluster_marker_genes.csv", header = 1)
@@ -159,7 +169,6 @@ saveNicheNetPlots <- function(fig_list, sender, receiver, fig_path = "/plots/") 
 
 
 ### Visualize NicheNet RL interction results for tumor & macrophage pair
-
 ```{r}
 tumor_clusters <- c("Tumor")
 macrophage_clusters <- c("Macrophage.1", "Macrophage.2")

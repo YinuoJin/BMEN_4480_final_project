@@ -1,0 +1,260 @@
+---
+title: "NicheNet analysis with updated, cluster-specific L-R weights; BMEN 4480 Final Project"
+output: html_notebook
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library(nichenetr))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyverse))
+suppressMessages(library(Seurat))
+suppressMessages(library(ggplot2))
+```
+
+```{r}
+print(getwd()) # double-check the project path is correct
+data_path <- "dataset/"
+```
+
+# Load NicheNet prior models, Load updated weighted network, Load dataset
+### Load NicheNet models
+```{r}
+lr_network <- readRDS(paste0(data_path, "lr_network.rds"))
+weighted_networks <- readRDS(paste0(data_path, "weighted_networks.rds"))
+ligand_target_matrix <- readRDS(paste0(data_path, "ligand_target_matrix.rds"))
+```
+
+### Load updated weighted network
+```{r}
+lr_sig_tumor_macro1 <- read.csv(paste0(data_path, "lr_sig_tumor_macro1.csv"), header = 1)
+lr_sig_tumor_macro2 <- read.csv(paste0(data_path, "lr_sig_tumor_macro2.csv"), header = 1)
+lr_sig_macro1_tumor <- read.csv(paste0(data_path, "lr_sig_macro1_tumor.csv"), header = 1)
+lr_sig_macro2_tumor <- read.csv(paste0(data_path, "lr_sig_macro2_tumor.csv"), header = 1)
+
+lr_sig_list <- list("Tumor_Macrophage.1" = lr_sig_tumor_macro1,
+                    "Tumor_Macrophage.2" = lr_sig_tumor_macro2,
+                    "Macrophage.1_Tumor" = lr_sig_macro1_tumor,
+                    "Macrophage.2_Tumor" = lr_sig_macro2_tumor)
+```
+
+### Load expressed genes and cluster-wise specific "marker genes" - top DEGs
+
+```{r}
+expr_genes <- read.csv(paste0(data_path, "expressed_genes.csv"), header = 1)
+marker_genes <- read.csv("dataset/cluster_marker_genes.csv", header = 1)
+```
+
+### Load count matrix (filtered, log-normal transformed and batch-corrected)
+```{r}
+# raw data
+counts <- read.csv(paste0(data_path, "preprocessed_counts.csv"), row.names = "Cell_ID", header = 1)
+cluster_assignment <- counts$Cluster_ID
+counts$Cluster_ID <- NULL
+
+# Seurat  object
+counts_s <- CreateSeuratObject(counts = t(counts), project = "raw")
+counts_s <- AddMetaData(
+  object = counts_s,
+  metadata = cluster_assignment,
+  col.name = "cluster.ident"
+)
+```
+
+# Running NicheNet
+### Import helper function
+```{r}
+require(gridExtra)
+suppressMessages(library(hash))
+source("rl_utils.R")
+```
+
+### Wrapper functions
+```{r}
+#' Wrapper function to run a single NicheNet analysis (Sender cluster -> Receiver cluster)
+#' @param counts_s Gene by Cell count matrix in Seurat object
+#' @param sender Name for sender cluster
+#' @param receiver Name for receiver cluster
+#' @param prior_models NicheNet prior networks
+#' @return list of prediction raw results & plots
+runNicheNet <- function(sender, receiver, counts_s, prior_models, fig_path = "/plots_weighted/") { 
+  print(paste("Predicting RL interactions from", sender, "-->", receiver, sep = " "))
+  
+  sc_expr_genes <- expr_genes[[sender]]
+  rc_expr_genes <- expr_genes[[receiver]]
+  rc_marker_gsoi <- marker_genes[[receiver]] # genes of inteset (DEGs / marker genes) for the receiver cluster
+  
+  result_list <- get_RL_pred(count_matrix = counts_s,
+                             geneset_oi = rc_marker_gsoi,
+                             es = sc_expr_genes,
+                             er = rc_expr_genes,
+                             from_count = FALSE,
+                             N = 25,
+                             prior_models = prior_models,
+                             name_l = sender,
+                             name_r = receiver,
+                             fig_path = fig_path)
+  
+    # visualization
+    p1 <- result_list$p_ligand_receptor_network
+    p2 <- DotPlot(counts_s,
+                  features = result_list$best_upstream_ligands %>% rev(),
+                  cols = "RdBu",
+                  group.by = "cluster.ident"
+                 ) + RotatedAxis() + xlab(paste("Ligand in", sender))
+    p3 <- DotPlot(counts_s,
+                  features = result_list$top_receptors %>% rev(),
+                  cols = "RdBu",
+                  group.by = "cluster.ident"
+                 ) + RotatedAxis() + xlab(paste("Receptors in", receiver)) + theme(
+                                        axis.text.x=element_text(angle=45,size = rel(0.5), margin = margin(0.2, unit = "cm"), vjust = 1))
+    
+    res <- list(pred_lr_network=result_list$pred_lr_network,
+                top_ligands=result_list$best_upstream_ligands, 
+                top_receptors=result_list$top_receptors, 
+                fig=list(lr_network=p1, dot_ligands=p2, dot_receptors=p3))
+    
+    return (res)
+}
+```
+
+
+```{r}
+# Wrapper function to save plots
+saveNicheNetPlots <- function(fig_list, sender, receiver, fig_path = "/plots_weighted/") {
+    fig_path = paste0(getwd(), fig_path)
+    if (!dir.exists(fig_path)) {
+        dir.create(fig_path)
+    }
+    
+    tiff(filename = paste0(fig_path, "rl_", sender, '_', receiver, ".tiff"), width = 10, height = 6, units = "in", res = 300)
+    print(fig_list$lr_network)
+    dev.off()
+
+    tiff(filename = paste0(fig_path, "ligand_", sender, '_', receiver, ".tiff"), width = 8, height = 5, units = "in", res = 300)
+    print(fig_list$dot_ligands)
+    dev.off()
+    
+    tiff(filename = paste0(fig_path, "receptor_", sender, '_', receiver, ".tiff"), width = 8, height = 5, units = "in", res = 300)
+    print(fig_list$dot_receptors)
+    dev.off()
+}
+```
+
+
+### Visualize NicheNet RL interction results for tumor & macrophage pair
+```{r}
+tumor_clusters <- c("Tumor")
+macrophage_clusters <- c("Macrophage.1", "Macrophage.2")
+
+pred_lr_network_list = list()
+
+for (tumor in tumor_clusters) {
+  for (macrophage in macrophage_clusters) {
+    # keywords
+    k1 <- paste(tumor, macrophage, sep = '_')
+    k2 <- paste(macrophage, tumor, sep = '_')
+    
+    # Ligand --> Receptor: Tumor cluster --> Macrophage
+    res_tumor_to_macrophage <- runNicheNet(
+        counts_s = counts_s,
+        sender = tumor,
+        receiver = macrophage,
+        prior_models = list(lr_network = lr_network,
+                            weighted_networks = list(lr_sig = lr_sig_list[[k1]], gr = weighted_networks$gr),
+                            ligand_target_matrix = ligand_target_matrix
+        )
+    )
+    pred_lr_network_list[[paste(tumor, macrophage, sep = '_')]] <- res_tumor_to_macrophage$pred_lr_network
+    saveNicheNetPlots(res_tumor_to_macrophage$fig, sender = tumor, receiver = macrophage)
+    
+    # Ligand --> Receptor: Macrophage --> Tumor cluster
+    res_macrophage_to_tumor <- runNicheNet(
+        counts_s = counts_s,
+        sender = macrophage,
+        receiver = tumor,
+        prior_models = list(lr_network = lr_network,
+                            weighted_networks = list(lr_sig = lr_sig_list[[k2]], gr = weighted_networks$gr),
+                            ligand_target_matrix = ligand_target_matrix
+        )
+    )
+    pred_lr_network_list[[paste(macrophage, tumor, sep = '_')]] <- res_macrophage_to_tumor$pred_lr_network
+    saveNicheNetPlots(res_macrophage_to_tumor$fig, sender = macrophage, receiver = tumor)
+    gc()
+  }
+}
+```
+
+```{r}
+prior_models = list(lr_network = lr_network,
+                    weighted_networks = list(lr_sig = lr_sig_list$Tumor_Macrophage.1, gr = weighted_networks$gr),
+                    ligand_target_matrix = ligand_target_matrix
+)
+```
+
+
+# Save top R-L interactions predicted from each tumor-macrophage cluster
+```{r}
+# Helper function
+topPredRLscores <- function(pred_lr_network, n = 50) {
+    top_prior_scores <- rev(sort(unlist(pred_lr_network)))
+    top_prior_scores <- top_prior_scores[top_prior_scores > 0][1:n]
+    indices <- lapply(top_prior_scores, function(x) which(pred_lr_network == x, arr.ind = TRUE))
+    
+    top_score_df <- data.frame(Ligand = character(), Receptor = character(), Score = numeric())
+    for (i in 1:n) {
+        top_score_df <- rbind(top_score_df, data.frame(
+            Ligand = colnames(pred_lr_network)[indices[[i]][2]],
+            Receptor = rownames(pred_lr_network)[indices[[i]][1]],
+            Score = top_prior_scores[i]
+        ))
+    }
+    
+    return(top_score_df)
+}
+```
+
+
+### Tumor --> Macrophage 1
+```{r}
+topPredRLscores(pred_lr_network_list$Tumor_Macrophage.1)
+```
+
+### Macrophage 1 --> Tumor
+```{r}
+topPredRLscores(pred_lr_network_list$Macrophage.1_Tumor)
+```
+
+### Tumor --> Macrophage 2
+```{r}
+topPredRLscores(pred_lr_network_list$Tumor_Macrophage.2)
+```
+
+### Macrophage 2 --> Tumor
+```{r}
+topPredRLscores(pred_lr_network_list$Macrophage.2_Tumor)
+```
+
+
+### Save top 50 R-L pairs to csv (serve as a comparison against using NicheNet's prior L-R potential scores)
+```{r}
+output_path <- paste0(getwd(), "/top_rl_pairs_weighted/")
+if (!dir.exists(output_path)) {
+   dir.create(output_path)
+}
+
+for (tumor in tumor_clusters) {
+  for (macrophage in macrophage_clusters) {
+    keyword1 <- paste(tumor, macrophage, sep = "_")
+    keyword2 <- paste(macrophage, tumor, sep = "_")
+    
+    write.table(data.frame(topPredRLscores(pred_lr_network_list[[keyword1]])), 
+                paste0(output_path, keyword1, ".csv"), sep=',' )
+    write.table(data.frame(topPredRLscores(pred_lr_network_list[[keyword2]])), 
+                paste0(output_path, keyword2, ".csv"), sep=',' )
+  }
+}
+```
