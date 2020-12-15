@@ -1,0 +1,95 @@
+---
+title: "Pathway analysis & network visualization"
+output: html_notebook
+---
+
+```{r}
+library(nichenetr)
+library(tidyverse)
+library(rsvg)
+library(magrittr)
+```
+
+# Import NicheNet prior networks
+```{r}
+weighted_networks = readRDS(url("https://zenodo.org/record/3260758/files/weighted_networks.rds"))
+ligand_tf_matrix = readRDS(url("https://zenodo.org/record/3260758/files/ligand_tf_matrix.rds"))
+
+lr_network = readRDS(url("https://zenodo.org/record/3260758/files/lr_network.rds"))
+sig_network = readRDS(url("https://zenodo.org/record/3260758/files/signaling_network.rds"))
+gr_network = readRDS(url("https://zenodo.org/record/3260758/files/gr_network.rds"))
+```
+
+# Define ligands & target genes of interest
+```{r}
+ligands_all = "HMGB1"
+# targets_all = c("IL6", "IL10", "TNF", "MMP14")
+targets_all = c("MMP14")
+```
+
+
+# Pathway inference between HMGB1 & its affected downstream target genes
+```{r}
+active_signaling_network = get_ligand_signaling_path(ligand_tf_matrix = ligand_tf_matrix, ligands_all = ligands_all, targets_all = targets_all, weighted_networks = weighted_networks)
+
+# For better visualization of edge weigths: normalize edge weights to make them comparable between signaling and gene regulatory interactions
+active_signaling_network_min_max = active_signaling_network
+active_signaling_network_min_max$sig = active_signaling_network_min_max$sig %>% mutate(weight = ((weight-min(weight))/(max(weight)-min(weight))) + 0.75)
+active_signaling_network_min_max$gr = active_signaling_network_min_max$gr %>% mutate(weight = ((weight-min(weight))/(max(weight)-min(weight))) + 0.75)
+
+graph_min_max = diagrammer_format_signaling_graph(signaling_graph_list = active_signaling_network_min_max, ligands_all = ligands_all, targets_all = targets_all, sig_color = "indianred", gr_color = "steelblue")
+```
+
+```{r}
+DiagrammeR::render_graph(graph_min_max, layout = "tree")
+```
+
+```{r}
+DiagrammeR::export_graph(graph_min_max,
+                         file_name = "tmp_pathway.pdf",
+                         file_type = "pdf")
+```
+
+# Visualization of the inferred Ligand-Receptor networks
+```{r}
+library(igraph)
+library(netbiov)
+```
+
+```{r}
+# Random networks for concept figure
+g <- erdos.renyi.game(20, 1/3)
+xx <- plot.igraph(g, vertex.color='orange',vertex.label=NA, )
+
+V(g)$color <- ifelse(mod(V(g), 3) == 0, "lightblue", "orange")
+plot.igraph(g, vertex.label=NA)
+```
+
+```{r}
+# Visualize inferred L-R networks between tumor-macrophage in the dataset
+tumor_macro <- read.csv("top_rl_pairs/Tumor_Macrophage.1.csv")
+tumor_macro
+```
+
+```{r}
+g_tumor_macro <- graph.data.frame(tumor_macro, directed=TRUE)
+V(g_tumor_macro)$color <- ifelse(V(g_tumor_macro) %in% tumor_macro$Ligand, "lightblue", "orange")
+```
+
+
+```{r}
+# regular plot
+plot.igraph(g_tumor_macro)
+
+# interactive plot
+tkplot(g_tumor_macro, 
+       vertex.size=30,
+       vertex.label.cex=2, 
+       vertex.label.color='black')
+```
+
+
+
+
+
+

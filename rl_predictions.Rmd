@@ -39,10 +39,8 @@ ligand_target_matrix[1:5, 1:5]
 
 
 ```{r}
+# save ligand-receptor prior network
 weighted_networks$lr_sig
-```
-
-```{r}
 write.csv(weighted_networks$lr_sig, file = paste0(data_path, "lr_sig.csv"))
 ```
 
