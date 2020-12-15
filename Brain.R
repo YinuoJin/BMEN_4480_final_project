@@ -8,7 +8,7 @@ library(ggplot2)
 data_path <- "dataset/"
 
 
-# load datsets
+# Load datasets
 countdata <- read.csv(paste0(data_path, "GSE89567_normalized.csv.gz"), header = TRUE, 
                        row.names = 1, as.is = TRUE, stringsAsFactors = FALSE)
 metadata <- read.csv(paste0(data_path, "metadata.csv"), header = TRUE, 
