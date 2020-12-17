@@ -35,6 +35,7 @@ Scripts
 
 Directories
 * dataset: Original & preprocessed count matrices
+* supplementary_materials: supplementary table for final report
 * plots: Output plots with NicheNet's prior network
 * plots_weighted: Output plots with our updated network
 * top_rl_pairs: Top inferreed L-R pairs with NicheNet's prior network
